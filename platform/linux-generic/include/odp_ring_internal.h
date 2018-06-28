@@ -54,15 +54,18 @@ static inline void ring_init(ring_t *ring)
 static inline uint32_t ring_deq(ring_t *ring, uint32_t mask)
 {
 	uint32_t head, tail, new_head;
-	uint32_t data;
+	uint32_t data, num, size;
 
+	size = mask + 1;
 	head = odp_atomic_load_u32(&ring->r_head);
 
 	/* Move reader head. This thread owns data at the new head. */
 	do {
 		tail = odp_atomic_load_acq_u32(&ring->w_tail);
+		num  = tail - head;
 
-		if (head == tail)
+		/* Ring is empty, or we see an old value of w_tail. */
+		if (num == 0 || num > size)
 			return RING_EMPTY;
 
 		new_head = head + 1;
@@ -85,23 +88,25 @@ static inline uint32_t ring_deq(ring_t *ring, uint32_t mask)
 
 /* Dequeue multiple data from the ring head. Num is smaller than ring size. */
 static inline uint32_t ring_deq_multi(ring_t *ring, uint32_t mask,
-				      uint32_t data[], uint32_t num)
+				      uint32_t data[], uint32_t max_num)
 {
-	uint32_t head, tail, new_head, i;
+	uint32_t head, tail, new_head;
+	uint32_t i, num, size;
 
+	size = mask + 1;
 	head = odp_atomic_load_u32(&ring->r_head);
 
 	/* Move reader head. This thread owns data at the new head. */
 	do {
 		tail = odp_atomic_load_acq_u32(&ring->w_tail);
+		num  = tail - head;
 
-		/* Ring is empty */
-		if (head == tail)
+		/* Ring is empty, or we see an old value of w_tail. */
+		if (num == 0 || num > size)
 			return 0;
 
-		/* Try to take all available */
-		if ((tail - head) < num)
-			num = tail - head;
+		if (num > max_num)
+			num = max_num;
 
 		new_head = head + num;
 
