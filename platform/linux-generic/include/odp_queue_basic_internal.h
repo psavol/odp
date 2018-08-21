@@ -22,6 +22,7 @@ extern "C" {
 #include <odp/api/hints.h>
 #include <odp/api/ticketlock.h>
 #include <odp_config_internal.h>
+#include <odp_ring_mpmc_internal.h>
 #include <odp_ring_st_internal.h>
 #include <odp_ring_spsc_internal.h>
 #include <odp_queue_lf.h>
@@ -35,6 +36,7 @@ extern "C" {
 struct queue_entry_s {
 	odp_ticketlock_t  ODP_ALIGNED_CACHE lock;
 	union {
+		ring_mpmc_t       ring_mpmc;
 		ring_st_t         ring_st;
 		ring_spsc_t       ring_spsc;
 	};
