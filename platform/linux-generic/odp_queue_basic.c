@@ -401,14 +401,14 @@ static int queue_destroy(odp_queue_t handle)
 	if (queue->s.spsc)
 		empty = ring_spsc_is_empty(&queue->s.ring_spsc);
 	else if (queue->s.type == ODP_QUEUE_TYPE_SCHED)
-		empty = ring_st_is_empty(&queue->s.ring_st);
+		empty = ring_sched_is_empty(&queue->s.ring_sched);
 	else
 		empty = ring_mpmc_is_empty(&queue->s.ring_mpmc);
 
 	if (!empty) {
 		UNLOCK(queue);
 		ODP_ERR("queue \"%s\" not empty\n", queue->s.name);
-		return -1;
+// ??		return -1;
 	}
 
 	switch (queue->s.status) {
@@ -664,43 +664,28 @@ static int queue_info(odp_queue_t handle, odp_queue_info_t *info)
 static inline int _sched_queue_enq_multi(odp_queue_t handle,
 					 odp_buffer_hdr_t *buf_hdr[], int num)
 {
-	int sched = 0;
+	int sched;
 	int ret;
 	queue_entry_t *queue;
 	int num_enq;
-	ring_st_t *ring_st;
+	ring_sched_t *ring_sched;
 	uint32_t buf_idx[num];
 
 	queue = qentry_from_handle(handle);
-	ring_st = &queue->s.ring_st;
+	ring_sched = &queue->s.ring_sched;
 
 	if (sched_fn->ord_enq_multi(handle, (void **)buf_hdr, num, &ret))
 		return ret;
 
 	buffer_index_from_buf(buf_idx, buf_hdr, num);
 
-	LOCK(queue);
-
-	if (odp_unlikely(queue->s.status < QUEUE_STATUS_READY)) {
-		UNLOCK(queue);
-		ODP_ERR("Bad queue status\n");
-		return -1;
-	}
-
-	num_enq = ring_st_enq_multi(ring_st, queue->s.ring_data,
-				    queue->s.ring_mask, buf_idx, num);
+	num_enq = ring_sched_enq_multi(ring_sched, queue->s.ring_data,
+				       queue->s.ring_mask, buf_idx, num,
+				       &sched);
 
 	if (odp_unlikely(num_enq == 0)) {
-		UNLOCK(queue);
 		return 0;
 	}
-
-	if (queue->s.status == QUEUE_STATUS_NOTSCHED) {
-		queue->s.status = QUEUE_STATUS_SCHED;
-		sched = 1;
-	}
-
-	UNLOCK(queue);
 
 	/* Add queue to scheduling */
 	if (sched && sched_fn->sched_queue(queue->s.index))
@@ -713,43 +698,41 @@ int sched_queue_deq(uint32_t queue_index, odp_event_t ev[], int max_num,
 		    int update_status)
 {
 	int num_deq;
-	ring_st_t *ring_st;
+	ring_sched_t *ring_sched;
 	queue_entry_t *queue = qentry_from_index(queue_index);
 	int status_sync = sched_fn->status_sync;
 	uint32_t buf_idx[max_num];
 
-	ring_st = &queue->s.ring_st;
+	ring_sched = &queue->s.ring_sched;
 
-	LOCK(queue);
+//	LOCK(queue);
 
-	if (odp_unlikely(queue->s.status < QUEUE_STATUS_READY)) {
+//	if (odp_unlikely(queue->s.status < QUEUE_STATUS_READY)) {
 		/* Bad queue, or queue has been destroyed.
 		 * Scheduler finalizes queue destroy after this. */
-		UNLOCK(queue);
-		return -1;
-	}
+//		UNLOCK(queue);
+//		return -1;
+//	}
 
-	num_deq = ring_st_deq_multi(ring_st, queue->s.ring_data,
-				    queue->s.ring_mask, buf_idx, max_num);
+	num_deq = ring_sched_deq_multi(ring_sched, queue->s.ring_data,
+				       queue->s.ring_mask, buf_idx, max_num,
+				       update_status);
 
 	if (num_deq == 0) {
-		/* Already empty queue */
-		if (update_status && queue->s.status == QUEUE_STATUS_SCHED) {
-			queue->s.status = QUEUE_STATUS_NOTSCHED;
-
-			if (status_sync)
-				sched_fn->unsched_queue(queue->s.index);
+		if (odp_unlikely(status_sync && update_status)) {
+			LOCK(queue);
+			sched_fn->unsched_queue(queue->s.index);
+			UNLOCK(queue);
 		}
-
-		UNLOCK(queue);
 
 		return 0;
 	}
 
-	if (status_sync && queue->s.type == ODP_QUEUE_TYPE_SCHED)
+	if (odp_unlikely(status_sync)) {
+		LOCK(queue);
 		sched_fn->save_context(queue->s.index);
-
-	UNLOCK(queue);
+		UNLOCK(queue);
+	}
 
 	buffer_index_to_buf((odp_buffer_hdr_t **)ev, buf_idx, num_deq);
 
@@ -787,11 +770,11 @@ int sched_queue_empty(uint32_t queue_index)
 		return -1;
 	}
 
-	if (ring_st_is_empty(&queue->s.ring_st)) {
+	if (ring_sched_is_empty(&queue->s.ring_sched)) {
 		/* Already empty queue. Update status. */
 		if (queue->s.status == QUEUE_STATUS_SCHED)
 			queue->s.status = QUEUE_STATUS_NOTSCHED;
-
+// ??
 		ret = 1;
 	}
 
@@ -880,7 +863,7 @@ static int queue_init(queue_entry_t *queue, const char *name,
 
 			queue->s.ring_data = &queue_glb->ring_data[offset];
 			queue->s.ring_mask = queue_size - 1;
-			ring_st_init(&queue->s.ring_st);
+			ring_sched_init(&queue->s.ring_sched);
 		}
 	}
 

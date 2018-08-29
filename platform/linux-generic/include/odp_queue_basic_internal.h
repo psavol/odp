@@ -23,7 +23,7 @@ extern "C" {
 #include <odp/api/ticketlock.h>
 #include <odp_config_internal.h>
 #include <odp_ring_mpmc_internal.h>
-#include <odp_ring_st_internal.h>
+#include <odp_ring_sched_internal.h>
 #include <odp_ring_spsc_internal.h>
 #include <odp_queue_lf.h>
 
@@ -46,14 +46,13 @@ struct queue_entry_s {
 	odp_queue_type_t     type;
 
 	/* MPMC ring (2 cache lines). */
-	ring_mpmc_t          ring_mpmc;
-
-	odp_ticketlock_t     lock;
 	union {
-		ring_st_t    ring_st;
-		ring_spsc_t  ring_spsc;
+		ring_mpmc_t  ring_mpmc;
+		ring_sched_t ring_sched;
 	};
 
+	odp_ticketlock_t     lock;
+	ring_spsc_t          ring_spsc;
 	int                  status;
 
 	queue_deq_multi_fn_t orig_dequeue_multi;
