@@ -991,6 +991,53 @@ int odp_pktout_send(odp_pktout_queue_t queue, const odp_packet_t packets[],
 		    int num);
 
 /**
+ * Packet output options
+ */
+typedef struct odp_pktout_opt_t {
+	/** Don't free packet(s) to their pools after send. Application re-uses or frees
+	 *  the packet later on. */
+	int keep_packet;
+
+	/** Send completion event to the queue after the packet has been sent out of
+	 *  the interface. Each packet has an unique completion event (the same event cannot be
+	 *  used for multiple packets). */
+	int compl_event;
+
+	/** Packet output completion event. Event is sent to the destination after packet has
+	 *  been sent out of the interface. Packet itself can be the completion event (?). */
+	odp_event_t event;
+
+	/** Destination queue for the completion event */
+	odp_queue_t queue;
+
+	/* checksum override */
+
+	/* PTP time stamp */
+
+} odp_pktout_opt_t;
+
+/**
+ * Send packets with packet output options
+ *
+ * Like odp_pktout_send(), but offers additional packet output features. User may apply a single
+ * option for all packets, or define an option per packet.
+ *
+ * @param queue        Packet output queue handle
+ * @param packet[]     Array of packets to send
+ * @param opt[]        Array of packet output options
+ * @param num_pkt      Number of packets to send
+ * @param num_opt      Number of options. Valid values are:
+ *                       0: no options, use defaults
+ *                       1: single option for all packets
+ *                       num_pkt: an option per packet
+ *
+ * @return Number of packets sent (0 ... num_pkt)
+ * @retval <0 on failure
+ */
+int odp_pktout_send_opt(odp_pktout_queue_t queue, const odp_packet_t packet[],
+			const odp_pktout_opt_t opt[], int num_pkt, int num_opt);
+
+/**
  * MTU value of a packet IO interface
  *
  * @deprecated  Use odp_pktin_maxlen() and odp_pktout_maxlen() instead. MTU was
