@@ -36,6 +36,27 @@ extern "C" {
  */
 
 /**
+ * Timer type
+ */
+typedef enum {
+	/** Single shot timer with absolute expiration time */
+	ODP_TIMER_ABS = 0x01,
+
+	/** Single shot timer with relative expiration time */
+	ODP_TIMER_REL = 0x02,
+
+	/** Single shot timer (absolute or relative) */
+	ODP_TIMER_SINGLE = 0x03,
+
+	/** Periodic timer */
+	ODP_TIMER_PERIODIC = 0x10,
+
+	/** Single shot and periodic timers in the same timer pool */
+	ODP_TIMER_SINGLE_AND_PERIODIC = 0x20
+
+} odp_timer_type_t;
+
+/**
  * Clock sources for timers in timer pool.
  */
 typedef enum {
@@ -102,6 +123,18 @@ typedef enum {
  */
 
 /**
+ * Timer period
+ */
+typedef struct {
+	/** Period in nanoseconds. Set to zero if hertz is used. */
+	uint64_t period_ns;
+
+	/** Period in hertz. Set to zero if nanoseconds are used. */
+	uint64_t period_hz;
+
+} odp_timer_period_t;
+
+/**
  * Timer pool parameters
  */
 typedef struct {
@@ -129,6 +162,20 @@ typedef struct {
 	 *  long timeout was requested. */
 	uint64_t max_tmo;
 
+	/** Maximum timeout period
+	 *
+	 *  This parameter is considered only when periodic timers are used.
+	 *  It specifies the longest period to be requested for any periodic
+	 *  timer of the pool. Depending on implementation, the best performance
+	 *  may be reached when (in hertz) the requested resolution is
+	 *  a multiple of each requested period, and each requested period is
+	 *  a multiple of the maximum period.
+	 *
+	 *  For example, res_hz = 1 333 000 Hz, max_period_hz = 1 333 Hz and
+	 *  requested periods are 1 333 Hz, 2 666 Hz, 33 325 Hz, ...
+	 */
+	odp_timer_period_t max_period;
+
 	/** Number of timers needed. Application will create in maximum this
 	 *  many concurrent timers from the timer pool. */
 	uint32_t num_timers;
@@ -137,6 +184,17 @@ typedef struct {
 	 *  timer pool concurrently. When non-zero, only single thread uses the
 	 *  timer pool (concurrently). */
 	int priv;
+
+	/** Timer types
+	 *
+	 *  Specify if single shot, periodic or both timer types will be created
+	 *  from the timer pool:
+	 *
+	 *  ODP_TIMER_SINGLE:     Only single shot timers (default)
+	 *  ODP_TIMER_PERIODIC:   Only periodic timers
+	 *  ODP_TIMER_SINGLE_AND_PERIODIC: Both single shot and periodic timers
+	 **/
+	odp_timer_type_t type;
 
 	/** Clock source for timers */
 	odp_timer_clk_src_t clk_src;
@@ -175,11 +233,30 @@ typedef struct {
 	/** Maximum number of timer pools for the requested clock source */
 	uint32_t max_pools;
 
-	/** Maximum number of timers in a pool
+	/** Supported timer types
+	 *
+	 *  ODP_TIMER_SINGLE:                      Only single shot timers
+	 *  ODP_TIMER_PERIODIC:                    Only periodic timers
+	 *  ODP_TIMER_SINGLE | ODP_TIMER_PERIODIC: Single shot and periodic
+	 *                                         timers supported, but not in
+	 *                                         the same timer pool
+	 *  ODP_TIMER_SINGLE_AND_PERIODIC:         Single shot and periodic
+	 *                                         timers supported in the same
+	 *                                         timer pool
+	 */
+	odp_timer_type_t type;
+
+	/** Maximum number of single shot timers in a pool
 	 *
 	 * The value of zero means that limited only by the available
 	 * memory size for the pool. */
 	uint32_t max_timers;
+
+	/** Maximum number of periodic timers in a pool
+	 *
+	 * The value of zero means that limited only by the available
+	 * memory size for the pool. */
+	uint32_t max_timers_periodic;
 
 	/** Highest timer resolution in nanoseconds.
 	 *
@@ -239,6 +316,30 @@ typedef struct {
 	 */
 	odp_bool_t queue_type_plain;
 } odp_timer_capability_t;
+
+/**
+ * Timer create parameters
+ */
+typedef struct {
+	/** User defined pointer value to be copied to timeouts */
+	void *user_ptr;
+
+	/** Select how periodic timer overruns are handled
+	 *
+	 * When application has not acknowledged (@see odp_timer_ack()) the
+	 * previous timeout event
+	 * of a periodic timer:
+	 * 0: Timeout event delivery continues normally.
+	 * 1: No more timeout events are delivered until application
+	 *    acknowledges. Possible timer expiration overruns are catch up
+	 *    by sending missing timeout events to the queue.
+	 * 2: No more timeout events are delivered until application
+	 *    acknowledges. Possible timer expiration overruns are skipped by
+	 *    not sending missing timeout events to the queue.
+	 */
+	int overrun_mode;
+
+} odp_timer_param_t;
 
 /**
  * Query timer capabilities
@@ -387,6 +488,139 @@ int odp_timer_pool_info(odp_timer_pool_t timer_pool,
 odp_timer_t odp_timer_alloc(odp_timer_pool_t timer_pool, odp_queue_t queue, const void *user_ptr);
 
 /**
+ * Create timer
+ *
+ * Create a timer from the timer pool. The user_ptr parameter is copied to
+ * timeout events and can be retrieved using the odp_timeout_user_ptr() call.
+ *
+ * @param timer_pool   Timer pool
+ * @param timer_type   ODP_TIMER_SINGLE or ODP_TIMER_PERIODIC
+ * @param queue        Destination queue for timeout events
+ * @param param        Additional timer parameters. Use NULL if there are no
+ *                     parameters.
+ *
+ * @return Timer handle on success
+ * @retval ODP_TIMER_INVALID on failure
+ */
+odp_timer_t odp_timer_create(odp_timer_pool_t timer_pool,
+			     odp_timer_type_t timer_type,
+			     odp_queue_t queue,
+			     odp_timer_param_t *param);
+
+/**
+ * Set a single shot timer
+ *
+ * This call is valid only for single shot timers. It starts a timer with
+ * an expiration time and timeout event. Use 'type' parameter to select if
+ * expiration time is passed as absolute timer ticks (ODP_TIMER_ABS) or
+ * ticks relative to the current tick (ODP_TIMER_REL). Current timer tick
+ * can be requested with odp_timer_current_tick().
+ *
+ * The timer must not be active already when calling this function. Use
+ * odp_timer_reset() to reset an active timer.
+ *
+ * The user provided event can be of any event type, but only ODP_EVENT_TIMEOUT
+ * type events (odp_timeout_t) carry timeout specific metadata. Furthermore,
+ * timer performance may have been optimized for that event type. When the timer
+ * expires, the event is enqueued to the destination queue of the timer.
+ *
+ * @param timer    Single shot timer
+ * @param type     ODP_TIMER_ABS or ODP_TIMER_REL
+ * @param tick     Expiration time in timer ticks. Absolute (ODP_TIMER_ABS) or
+ *                 relative (ODP_TIMER_REL) expiration time.
+ * @param tmo_ev   Timeout event. The event is enqueued when the timer expires.
+ *
+ * @return 0 on success, <0 on failure
+ * @retval ODP_TIMER_SUCCESS  Success
+ * @retval ODP_TIMER_TOO_NEAR Failure. Expiration time is too near to
+ *                            the current time.
+ * @retval ODP_TIMER_TOO_FAR  Failure. Expiration time is too far from
+ *                            the current time.
+ */
+int odp_timer_set(odp_timer_t timer, odp_timer_type_t type, uint64_t tick,
+		  odp_event_t tmo_ev);
+
+/**
+ * Set a periodic timer
+ *
+ * This call is valid only for periodic timers. It sets the timer to deliver
+ * the timeout event periodically starting from the first expiration time
+ * provided. The first expiration time must be within max_period (timer pool
+ * parameter) from the current time. The requested period must not exceed
+ * max_period.
+ *
+ * The timer must not be active when calling this function. Periodic timers
+ * cannot be reset. If the period needs to be changed, the timer is first
+ * cancelled and then started again with new parameters.
+ *
+ * The user provided event can be of any event type, but only ODP_EVENT_TIMEOUT
+ * type events (odp_timeout_t) carry timeout specific metadata. Furthermore,
+ * timer performance may have been optimized for that event type. The event is
+ * enqueued to the destination queue of the timer on each period. Application
+ * must acknowledge the event with odp_timer_ack() soon after receiving it.
+ *
+ * @param timer       Periodic timer
+ * @param first_tick  The first expiration time in absolute timer ticks, or
+ *                    zero if periodical expiration starts from the current
+ *                    time. Must be within 'max_period' from the current time.
+ * @param period      Timer expiration period. The period is relative to
+ *                    'first_tick' and must not exceed max_period.
+ * @param tmo_ev      Timeout event. The event is enqueued when the timer
+ *                    expires (on each period).
+ *
+ * @return 0 on success, <0 on failure
+ * @retval ODP_TIMER_SUCCESS  Success
+ * @retval ODP_TIMER_TOO_NEAR Failure. The first expiration time is too near to
+ *                            the current time, or the period is too short.
+ * @retval ODP_TIMER_TOO_FAR  Failure. The first expiration time is too far from
+ *                            the current time, or the period is too long.
+ */
+int odp_timer_set_period(odp_timer_t timer, uint64_t first_tick,
+			 odp_timer_period_t period, odp_event_t tmo_ev);
+
+/**
+ * Reset a single shot timer
+ *
+ * This call is valid only for single shot timers (ODP_TIMER_ABS and
+ * ODP_TIMER_REL). Resets an active timer with a new expiration time. Use 'type'
+ * parameter to select if expiration time is passed as absolute timer ticks
+ * (ODP_TIMER_ABS) or ticks relative to the current tick (ODP_TIMER_REL).
+ *
+ * @param timer    Single shot timer
+ * @param type     ODP_TIMER_ABS or ODP_TIMER_REL
+ * @param tick     New expiration time
+ *
+ * @return 0 on success, <0 on failure
+ * @retval ODP_TIMER_SUCCESS  Success
+ * @retval ODP_TIMER_TOO_NEAR Failure. Expiration time is too near to
+ *                            the current time.
+ * @retval ODP_TIMER_TOO_FAR  Failure. Expiration time is too far from
+ *                            the current time.
+ */
+int odp_timer_reset(odp_timer_t timer, odp_timer_type_t type, uint64_t tick);
+
+/**
+ * Acknowledge a periodic timeout
+ *
+ * This call is valid only for periodic timers. Each timeout event from
+ * a periodic timer must be acknowledged with this call. Acknowledgment should
+ * be done soon after receiving the event to maintain period accuracy.
+ * The timeout event must not be used or freed after a successful operation.
+ * When the call returns failure, the event is not consumed and application
+ * may use or free it normally. This happens e.g. when the timer was cancelled
+ * close to the last period expiration and the timeout event is delivered
+ * through the queue.
+ *
+ * @param timer    Periodic timer
+ * @param tmo_ev   Timeout event that was received from the periodic timer
+ *
+ * @retval 0  Success. Timer consumed the timeout event.
+ * @retval <0 Failure. Timer cancelled or inactive. The timeout event was
+ *                     not consumed (application owns it).
+ */
+int odp_timer_ack(odp_timer_t timer, odp_event_t tmo_ev);
+
+/**
  * Free a timer
  *
  * Free (destroy) a timer, reclaiming associated resources.
@@ -467,14 +701,22 @@ int odp_timer_set_rel(odp_timer_t timer, uint64_t rel_tick,
 /**
  * Cancel a timer
  *
- * Cancel a timer, preventing future expiration and event delivery. Return any
- * present event.
+ * When cancelling a single shot timer, a successful operation prevents timer
+ * expiration and returns the timeout event through 'tmo_ev' parameter. If the
+ * timer has already expired, failure is returned and the timeout event will be
+ * delivered to the destination queue.
  *
- * A timer that has already expired may be impossible to cancel and the timeout
- * will instead be delivered to the destination queue.
+ * When cancelling a periodic timer, a successful operation prevents the timer
+ * to expire on future periods. If the next period has expired already, the
+ * timeout event will be delivered to the destination queue, otherwise it is
+ * returned through 'tmo_ev' parameter. Cancel of a periodic timer returns
+ * failure only in abnormal situations. Application does not acknowledge the
+ * event outputted through 'tmo_ev', but may use or free it normally.
  *
  * @param      timer  Timer
- * @param[out] tmo_ev Pointer to an event handle for output
+ * @param[out] tmo_ev Pointer to event handle. A successful operation outputs
+ *                    the timeout event or ODP_EVENT_INVALID (when the next
+ *                    period expired already).
  *
  * @retval 0  Success. Active timer cancelled, timeout returned in 'tmo_ev'
  * @retval <0 Failure. Timer inactive or already expired.
