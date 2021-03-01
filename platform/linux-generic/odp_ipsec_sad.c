@@ -922,7 +922,7 @@ int _odp_ipsec_sa_replay_update(ipsec_sa_t *ipsec_sa, uint32_t seq,
 
 uint16_t _odp_ipsec_sa_alloc_ipv4_id(ipsec_sa_t *ipsec_sa)
 {
-	(void) ipsec_sa;
+	(void)ipsec_sa;
 	ipsec_thread_local_t *tl = &ipsec_sa_tbl->per_thread[odp_thread_id()];
 	uint32_t data;
 

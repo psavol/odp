@@ -1238,10 +1238,9 @@ static odp_bool_t run_sched(tm_system_t *tm_system,
 			 * virtual finish time, just insert it into this
 			 * sched_state's list sorted by virtual finish times.
 			 */
-			rc = _odp_sorted_list_insert(
-				tm_system->_odp_int_sorted_pool,
-				new_sched_state->sorted_list,
-				new_finish_time, new_pkt_desc->word);
+			rc = _odp_sorted_list_insert(tm_system->_odp_int_sorted_pool,
+						     new_sched_state->sorted_list,
+						     new_finish_time, new_pkt_desc->word);
 
 			if (0 <= rc) {
 				new_sched_state->sorted_list_cnt++;
@@ -2307,9 +2306,8 @@ static int tm_process_input_work_queue(tm_system_t *tm_system,
 			/* If the tm_queue_obj already has a pkt to work with,
 			 * then just add this new pkt to the associated
 			 * _odp_int_pkt_queue. */
-			(void)_odp_pkt_queue_append(
-				tm_system->_odp_int_queue_pool,
-				tm_queue_obj->_odp_int_pkt_queue, pkt);
+			(void)_odp_pkt_queue_append(tm_system->_odp_int_queue_pool,
+						    tm_queue_obj->_odp_int_pkt_queue, pkt);
 			tm_queue_obj->pkts_enqueued_cnt++;
 		} else {
 			/* If the tm_queue_obj doesn't have a pkt to work
@@ -2749,6 +2747,7 @@ static int tm_thread_create(tm_system_group_t *tm_group)
 			rc);
 	return rc;
 }
+
 static void _odp_tm_group_destroy(_odp_tm_group_t odp_tm_group)
 {
 	tm_system_group_t *tm_group;
@@ -2976,21 +2975,19 @@ odp_tm_t odp_tm_create(const char            *name,
 	odp_ticketlock_init(&tm_system->tm_system_lock);
 	odp_atomic_init_u64(&tm_system->destroying, 0);
 
-	tm_system->_odp_int_sorted_pool = _odp_sorted_pool_create(
-		max_sorted_lists);
+	tm_system->_odp_int_sorted_pool = _odp_sorted_pool_create(max_sorted_lists);
 	create_fail |= tm_system->_odp_int_sorted_pool
 		== _ODP_INT_SORTED_POOL_INVALID;
 
 	if (create_fail == 0) {
-		tm_system->_odp_int_queue_pool = _odp_queue_pool_create(
-			max_num_queues, max_queued_pkts);
+		tm_system->_odp_int_queue_pool = _odp_queue_pool_create(max_num_queues,
+									max_queued_pkts);
 		create_fail |= tm_system->_odp_int_queue_pool
 			== _ODP_INT_QUEUE_POOL_INVALID;
 	}
 
 	if (create_fail == 0) {
-		tm_system->_odp_int_timer_wheel = _odp_timer_wheel_create(
-			max_timers, tm_system);
+		tm_system->_odp_int_timer_wheel = _odp_timer_wheel_create(max_timers, tm_system);
 		create_fail |= tm_system->_odp_int_timer_wheel
 			== _ODP_INT_TIMER_WHEEL_INVALID;
 	}
@@ -3007,20 +3004,14 @@ odp_tm_t odp_tm_create(const char            *name,
 	if (create_fail) {
 		_odp_int_name_tbl_delete(name_tbl_id);
 
-		if (tm_system->_odp_int_sorted_pool
-		    != _ODP_INT_SORTED_POOL_INVALID)
-			_odp_sorted_pool_destroy(
-				tm_system->_odp_int_sorted_pool);
+		if (tm_system->_odp_int_sorted_pool != _ODP_INT_SORTED_POOL_INVALID)
+			_odp_sorted_pool_destroy(tm_system->_odp_int_sorted_pool);
 
-		if (tm_system->_odp_int_queue_pool !=
-		    _ODP_INT_QUEUE_POOL_INVALID)
-			_odp_queue_pool_destroy(
-				tm_system->_odp_int_queue_pool);
+		if (tm_system->_odp_int_queue_pool != _ODP_INT_QUEUE_POOL_INVALID)
+			_odp_queue_pool_destroy(tm_system->_odp_int_queue_pool);
 
-		if (tm_system->_odp_int_timer_wheel
-		    != _ODP_INT_TIMER_WHEEL_INVALID)
-			_odp_timer_wheel_destroy(
-				tm_system->_odp_int_timer_wheel);
+		if (tm_system->_odp_int_timer_wheel != _ODP_INT_TIMER_WHEEL_INVALID)
+			_odp_timer_wheel_destroy(tm_system->_odp_int_timer_wheel);
 
 		tm_system_free(tm_system);
 		odp_ticketlock_unlock(&tm_glb->create_lock);
@@ -3708,9 +3699,8 @@ odp_tm_node_t odp_tm_node_create(odp_tm_t odp_tm, const char *name,
 	schedulers_obj = &tm_node_obj->schedulers_obj;
 	schedulers_obj->num_priorities = num_priorities;
 	for (priority = 0; priority < num_priorities; priority++) {
-		sorted_list = _odp_sorted_list_create(
-			tm_system->_odp_int_sorted_pool,
-			params->max_fanin);
+		sorted_list = _odp_sorted_list_create(tm_system->_odp_int_sorted_pool,
+						      params->max_fanin);
 		schedulers_obj->sched_states[priority].sorted_list =
 			sorted_list;
 	}
@@ -4673,8 +4663,8 @@ int odp_tm_total_threshold_config(odp_tm_t odp_tm,
 		return -1;
 
 	odp_ticketlock_lock(&tm_glb->profile_lock);
-	tm_system->total_info.threshold_params = tm_get_profile_params(
-		thresholds_profile, TM_THRESHOLD_PROFILE);
+	tm_system->total_info.threshold_params = tm_get_profile_params(thresholds_profile,
+								       TM_THRESHOLD_PROFILE);
 	odp_ticketlock_unlock(&tm_glb->profile_lock);
 	return 0;
 }

@@ -89,7 +89,6 @@ static int systemcpu_cache_line_size(void)
 }
 #endif
 
-
 static uint64_t default_huge_page_size(void)
 {
 	char str[1024];
@@ -303,7 +302,6 @@ static int systemcpu(system_info_t *sysinfo)
 	}
 
 	sysinfo->cpu_count = ret;
-
 
 	ret = systemcpu_cache_line_size();
 	if (ret == 0) {
