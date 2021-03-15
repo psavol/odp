@@ -1,5 +1,5 @@
 /* Copyright (c) 2013-2018, Linaro Limited
- * Copyright (c) 2020, Nokia
+ * Copyright (c) 2020-2021, Nokia
  * All rights reserved.
  *
  * SPDX-License-Identifier:     BSD-3-Clause
@@ -83,6 +83,9 @@ typedef enum odp_cpu_arch_arm_t {
 
 	/** ARMv8.6-A ISA */
 	ODP_CPU_ARCH_ARMV8_6,
+
+	/** ARMv8.7-A ISA */
+	ODP_CPU_ARCH_ARMV8_7,
 
 } odp_cpu_arch_arm_t;
 
