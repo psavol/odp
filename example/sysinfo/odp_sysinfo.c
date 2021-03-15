@@ -66,6 +66,8 @@ static const char *arm_isa(odp_cpu_arch_arm_t isa)
 		return "ARMv8.5-A";
 	case ODP_CPU_ARCH_ARMV8_6:
 		return "ARMv8.6-A";
+	case ODP_CPU_ARCH_ARMV8_7:
+		return "ARMv8.7-A";
 	default:
 		return "Unknown";
 	}
