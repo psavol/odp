@@ -1,5 +1,5 @@
 /* Copyright (c) 2013-2018, Linaro Limited
- * Copyright (c) 2019-2020, Nokia
+ * Copyright (c) 2019-2021, Nokia
  *
  * All rights reserved.
  *
@@ -39,12 +39,26 @@ extern "C" {
  * Clock sources for timers in timer pool.
  */
 typedef enum {
-	/** Use CPU clock as clock source for timers */
+	/** Use CPU clock as clock source for timers (default) */
 	ODP_CLOCK_CPU,
-	/** Use external clock as clock source for timers */
-	ODP_CLOCK_EXT
-	/* Platform dependent which other clock sources exist */
+
+	/** Use external clock 0 as clock source for timers */
+	ODP_CLOCK_EXT_0,
+
+	/** External clock 1 */
+	ODP_CLOCK_EXT_1,
+
+	/** External clock 2 */
+	ODP_CLOCK_EXT_2,
+
+	/** External clock 3 */
+	ODP_CLOCK_EXT_3,
+
 } odp_timer_clk_src_t;
+
+/** For timer API backwards compatibility,
+ *  ODP_CLOCK_EXT is synonym for ODP_CLOCK_EXT_0 */
+#define ODP_CLOCK_EXT ODP_CLOCK_EXT_0
 
 /**
  * @typedef odp_timer_t
