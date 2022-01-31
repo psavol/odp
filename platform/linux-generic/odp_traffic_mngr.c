@@ -599,6 +599,7 @@ static void tm_shaper_params_cvt_to(const odp_tm_shaper_params_t *shaper_params,
 	uint64_t max_peak_time_delta;
 	uint32_t min_time_delta;
 	int64_t  commit_burst, peak_burst;
+	odp_bool_t dual_rate;
 
 	commit_rate = tm_bps_to_rate(shaper_params->commit_rate);
 	if ((shaper_params->commit_rate == 0) || (commit_rate == 0)) {
@@ -621,12 +622,14 @@ static void tm_shaper_params_cvt_to(const odp_tm_shaper_params_t *shaper_params,
 	peak_rate = tm_bps_to_rate(shaper_params->peak_rate);
 	if ((!shaper_params->dual_rate) || (peak_rate == 0)) {
 		peak_rate = 0;
+		dual_rate = 0;
 		max_peak_time_delta = 0;
 		peak_burst = 0;
 		min_time_delta = (uint32_t)((1 << 26) / commit_rate);
 	} else {
 		max_peak_time_delta = tm_max_time_delta(peak_rate);
 		peak_burst = (int64_t)shaper_params->peak_burst;
+		dual_rate = 1;
 		highest_rate = MAX(commit_rate, peak_rate);
 		min_time_delta = (uint32_t)((1 << 26) / highest_rate);
 	}
@@ -640,7 +643,7 @@ static void tm_shaper_params_cvt_to(const odp_tm_shaper_params_t *shaper_params,
 	tm_shaper_params->max_peak = peak_burst << (26 - 3);
 	tm_shaper_params->min_time_delta = min_time_delta;
 	tm_shaper_params->len_adjust = shaper_params->shaper_len_adjust;
-	tm_shaper_params->dual_rate = shaper_params->dual_rate;
+	tm_shaper_params->dual_rate = dual_rate;
 	tm_shaper_params->enabled = 1;
 }
 
