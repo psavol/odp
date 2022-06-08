@@ -1236,7 +1236,7 @@ static inline int poll_pktin(uint32_t qi, int direct_recv,
 {
 	int pktio_index, pktin_index, num, num_pktin;
 	_odp_event_hdr_t **hdr_tbl;
-	int ret;
+	int ret, num_enq;
 	void *q_int;
 	_odp_event_hdr_t *b_hdr[CONFIG_BURST_SIZE];
 
@@ -1271,7 +1271,7 @@ static inline int poll_pktin(uint32_t qi, int direct_recv,
 		if (num_pktin == 0)
 			_odp_sched_cb_pktio_stop_finalize(pktio_index);
 
-		return num;
+		return -1;
 	}
 
 	if (direct_recv)
@@ -1279,14 +1279,15 @@ static inline int poll_pktin(uint32_t qi, int direct_recv,
 
 	q_int = qentry_from_index(qi);
 
-	ret = odp_queue_enq_multi(q_int, (odp_event_t *)b_hdr, num);
+	num_enq = odp_queue_enq_multi(q_int, (odp_event_t *)b_hdr, num);
+	ret = 0;
 
 	/* Drop packets that were not enqueued */
-	if (odp_unlikely(ret < num)) {
-		int num_enq = ret;
-
-		if (odp_unlikely(ret < 0))
+	if (odp_unlikely(num_enq < num)) {
+		if (odp_unlikely(num_enq < 0)) {
 			num_enq = 0;
+			ret = -1;
+		}
 
 		_ODP_DBG("Dropped %i packets\n", num - num_enq);
 		_odp_event_free_multi(&b_hdr[num_enq], num - num_enq);
@@ -1404,9 +1405,10 @@ static inline int schedule_grp_prio(odp_queue_t *out_queue, odp_event_t out_ev[]
 				continue;
 			}
 
-			if (num_pkt == 0 || !direct_recv) {
-				/* No packets to be returned. Continue scheduling
-				 * packet input queue even when it is empty. */
+			if (num_pkt == 0) {
+				/* There were no packets or all packets were enqueued to their
+				 * destination queues. Continue scheduling packet input queue even
+				 * when it is empty. */
 				ring_u32_enq(ring, ring_mask, qi);
 
 				/* Continue scheduling from the next spread */
