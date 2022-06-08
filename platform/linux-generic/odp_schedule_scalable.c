@@ -821,7 +821,7 @@ events_dequeued:
 	/* Ingress queue empty => poll pktio RX queue */
 	_odp_event_hdr_t *rx_evts[QUEUE_MULTI_MAX];
 	int num_rx = _odp_sched_cb_pktin_poll(elem->pktio_idx, elem->rx_queue,
-					      rx_evts, QUEUE_MULTI_MAX);
+					      rx_evts, QUEUE_MULTI_MAX, NULL);
 
 	if (odp_likely(num_rx > 0)) {
 		num = num_rx < num_evts ? num_rx : num_evts;

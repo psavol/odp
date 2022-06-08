@@ -648,9 +648,8 @@ static int schedule_multi(odp_queue_t *from, uint64_t wait,
 			odp_queue_t *queue = cmd->queue;
 
 			for (i = 0; i < num_pktin; i++) {
-				num_pkt = _odp_sched_cb_pktin_poll(pktio_idx,
-								   pktin_idx[i],
-								   hdr_tbl, max_num);
+				num_pkt = _odp_sched_cb_pktin_poll(pktio_idx, pktin_idx[i],
+								   hdr_tbl, max_num, NULL);
 
 				if (num_pkt < 0) {
 					/* Pktio stopped or closed. */

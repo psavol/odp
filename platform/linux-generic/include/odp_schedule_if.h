@@ -88,7 +88,7 @@ extern const schedule_fn_t *_odp_sched_fn;
 
 /* Interface for the scheduler */
 int _odp_sched_cb_pktin_poll(int pktio_index, int pktin_index,
-			     _odp_event_hdr_t *hdr_tbl[], int num);
+			     _odp_event_hdr_t *hdr_tbl[], int num, int *cls_prio);
 void _odp_sched_cb_pktio_stop_finalize(int pktio_index);
 
 #ifdef __cplusplus

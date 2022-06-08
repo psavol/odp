@@ -869,7 +869,7 @@ static inline odp_packet_vector_t packet_vector_create(odp_packet_t packets[], u
 }
 
 static inline int pktin_recv_buf(pktio_entry_t *entry, int pktin_index,
-				 _odp_event_hdr_t *event_hdrs[], int num)
+				 _odp_event_hdr_t *event_hdrs[], int num, int *cls_prio)
 {
 	odp_packet_t pkt;
 	odp_packet_t packets[num];
@@ -878,6 +878,7 @@ static inline int pktin_recv_buf(pktio_entry_t *entry, int pktin_index,
 	_odp_event_hdr_t *event_hdr;
 	int i, pkts, num_rx, num_ev, num_dst;
 	odp_queue_t cur_queue;
+	int cur_prio, prio;
 	odp_event_t ev[num];
 	odp_queue_t dst[num];
 	uint16_t cos[num];
@@ -951,6 +952,8 @@ static inline int pktin_recv_buf(pktio_entry_t *entry, int pktin_index,
 		return 1;
 	}
 
+	cur_prio = 0;
+
 	for (i = 0; i < num_dst; i++) {
 		cos_t *cos_hdr = NULL;
 		int num_enq, ret;
@@ -977,8 +980,13 @@ static inline int pktin_recv_buf(pktio_entry_t *entry, int pktin_index,
 
 		ret = odp_queue_enq_multi(dst[i], &ev[idx], num_enq);
 
-		if (ret < 0)
+		if (ret < 0) {
 			ret = 0;
+		} else if (cls_prio && ret > 0) {
+			prio = odp_queue_sched_prio(dst[i]);
+			if (prio > cur_prio)
+				cur_prio = prio;
+		}
 
 		if (ret < num_enq)
 			odp_event_free_multi(&ev[idx + ret], num_enq - ret);
@@ -987,6 +995,10 @@ static inline int pktin_recv_buf(pktio_entry_t *entry, int pktin_index,
 		if (cos[i] != CLS_COS_IDX_NONE)
 			_odp_cos_queue_stats_add(cos_hdr, dst[i], ret, num_enq - ret);
 	}
+
+	if (cls_prio)
+		*cls_prio = cur_prio;
+
 	return num_rx;
 }
 
@@ -1105,7 +1117,7 @@ static _odp_event_hdr_t *pktin_dequeue(odp_queue_t queue)
 	if (_odp_queue_fn->orig_deq_multi(queue, &event_hdr, 1) == 1)
 		return event_hdr;
 
-	pkts = pktin_recv_buf(entry, pktin_index, hdr_tbl, QUEUE_MULTI_MAX);
+	pkts = pktin_recv_buf(entry, pktin_index, hdr_tbl, QUEUE_MULTI_MAX, NULL);
 
 	if (pkts <= 0)
 		return NULL;
@@ -1153,7 +1165,7 @@ static int pktin_deq_multi(odp_queue_t queue, _odp_event_hdr_t *event_hdr[],
 	if (nbr == num)
 		return nbr;
 
-	pkts = pktin_recv_buf(entry, pktin_index, hdr_tbl, QUEUE_MULTI_MAX);
+	pkts = pktin_recv_buf(entry, pktin_index, hdr_tbl, QUEUE_MULTI_MAX, NULL);
 
 	if (pkts <= 0)
 		return nbr;
@@ -1183,8 +1195,8 @@ static int pktin_deq_multi(odp_queue_t queue, _odp_event_hdr_t *event_hdr[],
 	return nbr;
 }
 
-int _odp_sched_cb_pktin_poll(int pktio_index, int pktin_index,
-			     _odp_event_hdr_t *hdr_tbl[], int num)
+int _odp_sched_cb_pktin_poll(int pktio_index, int pktin_index, _odp_event_hdr_t *hdr_tbl[],
+			     int num, int *cls_prio)
 {
 	pktio_entry_t *entry = pktio_entry_by_index(pktio_index);
 	int state = entry->state;
@@ -1198,7 +1210,7 @@ int _odp_sched_cb_pktin_poll(int pktio_index, int pktin_index,
 		return 0;
 	}
 
-	return pktin_recv_buf(entry, pktin_index, hdr_tbl, num);
+	return pktin_recv_buf(entry, pktin_index, hdr_tbl, num, cls_prio);
 }
 
 void _odp_sched_cb_pktio_stop_finalize(int pktio_index)

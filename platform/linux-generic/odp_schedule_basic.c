@@ -1268,7 +1268,7 @@ static inline int poll_pktin(uint32_t qi, int direct_recv,
 	pktio_index = sched->queue[qi].pktio_index;
 	pktin_index = sched->queue[qi].pktin_index;
 
-	num = _odp_sched_cb_pktin_poll(pktio_index, pktin_index, hdr_tbl, max_num);
+	num = _odp_sched_cb_pktin_poll(pktio_index, pktin_index, hdr_tbl, max_num, NULL);
 
 	if (num == 0)
 		return 0;
