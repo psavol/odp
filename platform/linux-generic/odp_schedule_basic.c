@@ -1247,7 +1247,7 @@ static inline int queue_is_pktin(uint32_t queue_index)
 }
 
 static inline int poll_pktin(uint32_t qi, int direct_recv,
-			     odp_event_t ev_tbl[], int max_num)
+			     odp_event_t ev_tbl[], int max_num, int *cls_prio)
 {
 	int pktio_index, pktin_index, num, num_pktin;
 	_odp_event_hdr_t **hdr_tbl;
@@ -1268,7 +1268,7 @@ static inline int poll_pktin(uint32_t qi, int direct_recv,
 	pktio_index = sched->queue[qi].pktio_index;
 	pktin_index = sched->queue[qi].pktin_index;
 
-	num = _odp_sched_cb_pktin_poll(pktio_index, pktin_index, hdr_tbl, max_num, NULL);
+	num = _odp_sched_cb_pktin_poll(pktio_index, pktin_index, hdr_tbl, max_num, cls_prio);
 
 	if (num == 0)
 		return 0;
@@ -1316,6 +1316,7 @@ static inline int schedule_grp_prio(odp_queue_t *out_queue, odp_event_t out_ev[]
 {
 	int spr, new_spr, i, ret;
 	uint32_t qi;
+	int restart = 0;
 	int num_spread = sched->config.num_spread;
 	uint32_t ring_mask = sched->ring_mask;
 	const uint32_t burst_def_sync[NUM_SCHED_SYNC] = {
@@ -1405,6 +1406,7 @@ static inline int schedule_grp_prio(odp_queue_t *out_queue, odp_event_t out_ev[]
 		if (num == 0) {
 			int direct_recv = !ordered;
 			int num_pkt;
+			int cls_prio = 0;
 
 			if (!pktin) {
 				/* Remove empty queue from scheduling */
@@ -1412,7 +1414,7 @@ static inline int schedule_grp_prio(odp_queue_t *out_queue, odp_event_t out_ev[]
 			}
 
 			/* Poll packet input queue */
-			num_pkt = poll_pktin(qi, direct_recv, ev_tbl, max_deq);
+			num_pkt = poll_pktin(qi, direct_recv, ev_tbl, max_deq, &cls_prio);
 
 			if (odp_unlikely(num_pkt < 0)) {
 				/* Pktio has been stopped or closed. Stop polling
@@ -1425,6 +1427,13 @@ static inline int schedule_grp_prio(odp_queue_t *out_queue, odp_event_t out_ev[]
 				 * destination queues. Continue scheduling packet input queue even
 				 * when it is empty. */
 				ring_u32_enq(ring, ring_mask, qi);
+
+				if (prio_level_from_api(cls_prio) < prio) {
+					/* Classifier enqueued events to a higher prio level.
+					 * Restart scheduling from the highest priority level,
+					 * if no events are found on this priority level. */
+					restart = 1;
+				}
 
 				/* Continue scheduling from the next spread */
 				i++;
@@ -1479,6 +1488,9 @@ static inline int schedule_grp_prio(odp_queue_t *out_queue, odp_event_t out_ev[]
 		return ret;
 	}
 
+	if (odp_unlikely(restart))
+		return -1;
+
 	return 0;
 }
 
@@ -1487,7 +1499,7 @@ static inline int schedule_grp_prio(odp_queue_t *out_queue, odp_event_t out_ev[]
  */
 static inline int do_schedule(odp_queue_t *out_q, odp_event_t out_ev[], uint32_t max_num)
 {
-	int i, num_grp, ret, spr, first_id, grp_id, grp, prio;
+	int i, num_grp, ret, spr, first_id, grp_id, grp, prio, restart;
 	uint32_t sched_round;
 	uint16_t spread_round;
 	uint32_t epoch;
@@ -1556,6 +1568,9 @@ static inline int do_schedule(odp_queue_t *out_q, odp_event_t out_ev[], uint32_t
 	first_id = sched_local.grp_idx;
 	sched_local.grp_idx = (first_id + 1) % num_grp;
 
+do_restart:
+	restart = 0;
+
 	for (prio = 0; prio < NUM_PRIO; prio++) {
 		grp_id = first_id;
 
@@ -1585,9 +1600,21 @@ static inline int do_schedule(odp_queue_t *out_q, odp_event_t out_ev[], uint32_t
 			/* Schedule events from the selected group and priority level */
 			ret = schedule_grp_prio(out_q, out_ev, max_num, grp, prio, spr, balance);
 
-			if (odp_likely(ret))
+			if (odp_likely(ret > 0))
 				return ret;
+
+			if (odp_unlikely(sched->cls_response && ret < 0)) {
+				if (sched->cls_response == 2)
+					goto do_restart;
+
+				restart = 1;
+			}
 		}
+
+		/* cls_response == 1 */
+		if (odp_unlikely(restart))
+			goto do_restart;
+
 	}
 
 	return 0;
