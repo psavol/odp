@@ -242,6 +242,7 @@ typedef struct {
 		uint8_t prefer_ratio;
 	} config;
 
+	uint8_t          cls_response;
 	uint8_t          load_balance;
 	uint16_t         max_spread;
 	uint32_t         ring_mask;
@@ -436,6 +437,20 @@ static int read_config_file(sched_global_t *sched)
 	sched->load_balance = 1;
 	if (val == 0 || sched->config.num_spread == 1)
 		sched->load_balance = 0;
+
+	str = "sched_basic.cls_response";
+	if (!_odp_libconfig_lookup_int(str, &val)) {
+		_ODP_ERR("Config option '%s' not found.\n", str);
+		return -1;
+	}
+
+	if (val < 0 || val > 2) {
+		_ODP_ERR("Bad value %s = %u\n", str, val);
+		return -1;
+	}
+
+	sched->cls_response = val;
+	_ODP_PRINT("  %s: %i\n", str, val);
 
 	/* Initialize default values for all queue types */
 	str = "sched_basic.burst_size_default";
