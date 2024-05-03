@@ -270,6 +270,15 @@ void odp_prefetch_strm_l1(const void *addr);
 void odp_prefetch_store_strm_l1(const void *addr);
 
 /**
+ * Prefetch into L1 instruction cache
+ *
+ * Hints CPU to prefetch application code into L1 instruction cache.
+ *
+ * @param addr   Instruction address to be prefetched (may be invalid)
+ */
+void odp_prefetch_l1i(const void *addr);
+
+/**
  * @}
  */
 
