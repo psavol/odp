@@ -1397,6 +1397,20 @@ static int destroy_packet_pool(test_global_t *global)
 	return 0;
 }
 
+static void pktio_capa_print(const char *name, const odp_pktio_capability_t *capa)
+{
+	printf("Packet IO capabilities (%s)\n", name);
+	printf("  max_input_queues:       %" PRIu32 "\n", capa->max_input_queues);
+	printf("  max_output_queues:      %" PRIu32 "\n", capa->max_output_queues);
+	printf("  min_input_queue_size:   %" PRIu32 "\n", capa->min_input_queue_size);
+	printf("  max_input_queue_size:   %" PRIu32 "\n", capa->max_input_queue_size);
+	printf("  min_output_queue_size:  %" PRIu32 "\n", capa->min_output_queue_size);
+	printf("  max_output_queue_size:  %" PRIu32 "\n", capa->max_output_queue_size);
+	printf("  maxlen.max_input:       %" PRIu32 "\n", capa->maxlen.max_input);
+	printf("  maxlen.max_output:      %" PRIu32 "\n", capa->maxlen.max_output);
+	printf("\n");
+}
+
 static int open_pktios(test_global_t *global)
 {
 	odp_pktio_capability_t pktio_capa;
@@ -1607,6 +1621,8 @@ static int open_pktios(test_global_t *global)
 			ODPH_ERR("Error (%s): Pktio capability failed.\n", name);
 			return -1;
 		}
+
+		pktio_capa_print(name, &pktio_capa);
 
 		if (num_rx > (int)pktio_capa.max_input_queues) {
 			ODPH_ERR("Error (%s): Too many RX threads. Interface supports max %u input queues.\n",
